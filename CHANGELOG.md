@@ -1,4 +1,10 @@
-﻿# Bilibili + Vocal Remover 2.4.0
+﻿# Bilibili + Vocal Remover 2.4.1
+
+- Sửa lỗi Get-FileHash không được nhận diện: dùng SHA-256 streaming của .NET cho kiểm tra công cụ, tạo ZIP và updater.
+- Worker Windows PowerShell tự khởi tạo PSModulePath, tránh kế thừa đường dẫn module từ host khác.
+- Giữ nguyên kiểm tra checksum và dữ liệu; thêm 11 hồi quy khi Get-FileHash bị vô hiệu hoá.
+
+# Bilibili + Vocal Remover 2.4.0
 
 - Thêm nút Vocal Remover trong Bilibili, chuyển sẵn audio vừa tải sang giao diện tách lời.
 - Cập nhật engine và giao diện Vocal cùng Bilibili trong một gói phát hành.

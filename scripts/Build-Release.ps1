@@ -32,6 +32,6 @@ foreach($license in Get-ChildItem -LiteralPath $aria.DirectoryName -File | Where
 if(Test-Path -LiteralPath (Join-Path $root 'tools/SHA2-256SUMS')){Copy-Item -LiteralPath (Join-Path $root 'tools/SHA2-256SUMS') -Destination (Join-Path $app 'tools/SHA2-256SUMS')}
 $zip=Join-Path $output ("Bilibili-Downloader-Windows-$version.zip")
 Compress-Archive -LiteralPath $app -DestinationPath $zip -Force
-$hash=(Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash.ToLowerInvariant()
+$hash=(Get-FileSha256 -LiteralPath $zip).ToLowerInvariant()
 [IO.File]::WriteAllText($zip+'.sha256',$hash+'  '+[IO.Path]::GetFileName($zip)+[Environment]::NewLine)
 @{zip=$zip;sha256=$hash;version=$version}|ConvertTo-Json -Compress

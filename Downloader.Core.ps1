@@ -1,4 +1,18 @@
 ﻿# Shared by the GUI, worker and regression checks. Compatible with Windows PowerShell 5.1.
+function Get-FileSha256 {
+    param([Parameter(Mandatory=$true)][string]$LiteralPath)
+    $path=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($LiteralPath)
+    $sha=[Security.Cryptography.SHA256]::Create()
+    $stream=$null
+    try{
+        $stream=[IO.File]::Open($path,[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+        return ([BitConverter]::ToString($sha.ComputeHash($stream))).Replace('-','')
+    }finally{
+        if($stream){$stream.Dispose()}
+        $sha.Dispose()
+    }
+}
+
 function Test-CapCutInputZip([string]$Path, $Files) {
     Add-Type -AssemblyName System.IO.Compression
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -22,7 +36,7 @@ function New-CapCutInputZip([string]$Path,[string]$VideoPath,[string]$AudioPath)
     $files=@(foreach($source in @($VideoPath,$AudioPath)){
         $file=Get-Item -LiteralPath $source -ErrorAction Stop
         if($file.PSIsContainer -or $file.Length -le 0){throw 'Chỉ đóng gói sau khi có đủ hai tệp media hoàn tất.'}
-        [pscustomobject]@{Path=$file.FullName;Name=$file.Name;Length=$file.Length;Hash=(Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash}
+        [pscustomobject]@{Path=$file.FullName;Name=$file.Name;Length=$file.Length;Hash=(Get-FileSha256 -LiteralPath $file.FullName)}
     })
     $fullPath=[IO.Path]::GetFullPath($Path)
     if(Test-Path -LiteralPath $fullPath){

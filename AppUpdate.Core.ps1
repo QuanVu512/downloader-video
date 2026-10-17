@@ -2,6 +2,9 @@
     return @('Downloader.Core.ps1','AppUpdate.Core.ps1','Start-Bilibili-Download.ps1','Start-GUI.ps1','Start.bat','Start-CLI.bat','README.txt')+@(Get-VocalRuntimeFiles)+@('VERSION.txt')
 }
 
+# Keep updater usable even when Windows PowerShell cannot autoload Get-FileHash.
+. (Join-Path $PSScriptRoot 'Downloader.Core.ps1')
+
 function Get-VocalRuntimeFiles {
     return @('app.py','vocal_queue.py','gui_entry.py','suite_runtime.py','requirements.txt','vocal.ico') | ForEach-Object {'tools/vocal-remover/'+$_}
 }
@@ -42,7 +45,7 @@ function Copy-AppFileAtomic([string]$Source,[string]$Destination) {
 }
 
 function Install-AppPackage([string]$Root,[string]$PackagePath,[string]$ExpectedHash,[string]$ExpectedVersion) {
-    if($ExpectedHash -notmatch '^[0-9a-fA-F]{64}$' -or (Get-FileHash -LiteralPath $PackagePath -Algorithm SHA256).Hash -ne $ExpectedHash){throw 'SHA-256 bản cập nhật không khớp; giữ nguyên ứng dụng hiện tại.'}
+    if($ExpectedHash -notmatch '^[0-9a-fA-F]{64}$' -or (Get-FileSha256 -LiteralPath $PackagePath) -ne $ExpectedHash){throw 'SHA-256 bản cập nhật không khớp; giữ nguyên ứng dụng hiện tại.'}
     if($ExpectedVersion -notmatch '^\d+\.\d+\.\d+$'){throw 'Phiên bản cập nhật không hợp lệ.'}
     $attempt=Join-Path (Join-Path $Root 'work') ('app-update-'+[Guid]::NewGuid().ToString('N'))
     $candidate=Join-Path $attempt 'candidate';$backup=Join-Path $attempt 'backup'
@@ -114,7 +117,7 @@ function Invoke-AppUpdate([string]$Root,[switch]$RepairVocal) {
     # The 2.3 updater keeps its ZIP but skips module files. Validate it against a
     # freshly fetched checksum before reusing it to complete the module install.
     $cached=Get-ChildItem -LiteralPath (Join-Path $Root 'work') -Filter $plan.Name -File -Recurse | Where-Object {
-        (Get-FileHash -LiteralPath $_.FullName -Algorithm SHA256).Hash -eq $expected
+        (Get-FileSha256 -LiteralPath $_.FullName) -eq $expected
     } | Select-Object -First 1
     if($cached){$zipPath=$cached.FullName}else{Invoke-WebRequest -UseBasicParsing -Uri $plan.ZipUrl -OutFile $zipPath -TimeoutSec 180}
     return (Install-AppPackage $Root $zipPath $expected $plan.Version)

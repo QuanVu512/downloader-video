@@ -41,7 +41,7 @@ function Get-Tooling {
     $valid = $false
     if ((Test-Path -LiteralPath $yt) -and (Test-Path -LiteralPath $sum)) {
         $line=Get-Content -LiteralPath $sum | Where-Object {$_ -match '\s+yt-dlp\.exe$'} | Select-Object -First 1
-        if($line){$expected=($line.Trim() -split '\s+')[0];$valid=(Get-FileHash -LiteralPath $yt -Algorithm SHA256).Hash -eq $expected}
+        if($line){$expected=($line.Trim() -split '\s+')[0];$valid=(Get-FileSha256 -LiteralPath $yt) -eq $expected}
     }
     $setupLock = $null
     $aria=Get-ChildItem -LiteralPath $Tools -Filter aria2c.exe -File -Recurse | Select-Object -First 1
@@ -62,7 +62,7 @@ function Get-Tooling {
                 Receive-ToolFile ($base+'yt-dlp.exe') $tempYt
                 Receive-ToolFile ($base+'SHA2-256SUMS') $tempSum
                 $line=Get-Content -LiteralPath $tempSum | Where-Object {$_ -match '\s+yt-dlp\.exe$'} | Select-Object -First 1
-                if(-not $line -or (Get-FileHash -LiteralPath $tempYt -Algorithm SHA256).Hash -ne ($line.Trim() -split '\s+')[0]){throw 'SHA-256 yt-dlp không khớp; giữ nguyên công cụ cũ. Thử cập nhật lại.'}
+                if(-not $line -or (Get-FileSha256 -LiteralPath $tempYt) -ne ($line.Trim() -split '\s+')[0]){throw 'SHA-256 yt-dlp không khớp; giữ nguyên công cụ cũ. Thử cập nhật lại.'}
                 Copy-Item -LiteralPath $tempYt -Destination $yt -Force
                 Copy-Item -LiteralPath $tempSum -Destination $sum -Force
             }finally{foreach($p in @($tempYt,$tempSum)){Remove-Item -LiteralPath $p -Force -ErrorAction SilentlyContinue}}
@@ -76,7 +76,7 @@ function Get-Tooling {
             $zip=Join-Path $Work ('aria2.'+$PID+'.zip')
             try{
                 Receive-ToolFile $asset.browser_download_url $zip
-                if($asset.digest -and $asset.digest -match '^sha256:(.+)$' -and (Get-FileHash -LiteralPath $zip -Algorithm SHA256).Hash -ne $Matches[1]){throw 'Mã SHA-256 aria2 không khớp.'}
+                if($asset.digest -and $asset.digest -match '^sha256:(.+)$' -and (Get-FileSha256 -LiteralPath $zip) -ne $Matches[1]){throw 'Mã SHA-256 aria2 không khớp.'}
                 Expand-Archive -LiteralPath $zip -DestinationPath $Tools -Force
             }finally{Remove-Item -LiteralPath $zip -Force -ErrorAction SilentlyContinue}
             $aria=Get-ChildItem -LiteralPath $Tools -Filter aria2c.exe -File -Recurse | Select-Object -First 1

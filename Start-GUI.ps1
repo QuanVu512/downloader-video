@@ -179,6 +179,9 @@ function Start-DownloaderWorker([string]$workerMode, [string[]]$arguments) {
     $psi.FileName = Join-Path $env:WINDIR 'System32\WindowsPowerShell\v1.0\powershell.exe'
     $psi.Arguments = (($baseArgs | ForEach-Object { Quote-ProcessArgument ([string]$_) }) -join ' ')
     $psi.WorkingDirectory = $root; $psi.UseShellExecute = $false; $psi.CreateNoWindow = $true
+    # Let Windows PowerShell rebuild its own module path instead of inheriting a
+    # PowerShell 7/Codex module path that can hide built-in helper commands.
+    $psi.EnvironmentVariables.Remove('PSModulePath')
     $psi.RedirectStandardOutput = $true; $psi.RedirectStandardError = $true
     $psi.StandardOutputEncoding = [Text.Encoding]::UTF8; $psi.StandardErrorEncoding = [Text.Encoding]::UTF8
     $script:worker = New-Object Diagnostics.Process
