@@ -1,4 +1,9 @@
-/tools/
+/tools/*
+!/tools/vocal-remover/
+/tools/vocal-remover/__pycache__/
+/tools/vocal-remover/.venv/
+/tools/vocal-remover/ui-settings.json
+/tools/vocal-remover/*.log
 /work/
 /dist/
 /tests/work/

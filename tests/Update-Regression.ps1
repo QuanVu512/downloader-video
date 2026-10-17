@@ -8,14 +8,20 @@ $work=Join-Path $PSScriptRoot ('work/update-tests-'+[Guid]::NewGuid().ToString('
 [void][IO.Directory]::CreateDirectory($work)
 $passed=0
 function Assert($condition,[string]$label){if(-not $condition){throw "FAIL $label"};$script:passed++;Write-Host "PASS $label"}
-function Fresh-Root {
+function Fresh-Root([switch]$Legacy) {
     $path=Join-Path $work ([Guid]::NewGuid().ToString('N'));[void][IO.Directory]::CreateDirectory($path)
-    foreach($name in Get-AppRuntimeFiles){[IO.File]::Copy((Join-Path $AppPath $name),(Join-Path $path $name))}
+    foreach($name in Get-AppRuntimeFiles){
+        if($Legacy -and $name.StartsWith('tools/')){continue}
+        $target=Join-Path $path $name
+        [void][IO.Directory]::CreateDirectory([IO.Path]::GetDirectoryName($target))
+        [IO.File]::Copy((Join-Path $AppPath $name),$target)
+    }
     [IO.File]::WriteAllText((Join-Path $path 'VERSION.txt'),'2.3.0')
     [void][IO.Directory]::CreateDirectory((Join-Path $path 'tools'));[void][IO.Directory]::CreateDirectory((Join-Path $path 'work'))
     [IO.File]::WriteAllText((Join-Path $path 'tools/keep.txt'),'installed tool')
     [IO.File]::WriteAllText((Join-Path $path 'work/keep.txt'),'local state')
     [IO.File]::WriteAllText((Join-Path $path 'media.native.part'),'partial data')
+    if(-not $Legacy){[IO.File]::WriteAllText((Join-Path $path 'tools/vocal-remover/ui-settings.json'),'user settings')}
     return $path
 }
 function Make-Package([string]$ExtraPath='', [switch]$InvalidScript) {
@@ -25,16 +31,13 @@ function Make-Package([string]$ExtraPath='', [switch]$InvalidScript) {
     try{
         foreach($name in Get-AppRuntimeFiles){
             $entry=$zip.CreateEntry('Bilibili-Downloader/'+$name)
-            $writer=New-Object IO.StreamWriter($entry.Open(),(New-Object Text.UTF8Encoding($true)))
-            try{
-                if($name -eq 'VERSION.txt'){$writer.Write('9.0.0')}
-                elseif($name -eq 'README.txt'){$writer.Write('New release README')}
-                else{
-                    $writer.Write([IO.File]::ReadAllText((Join-Path $AppPath $name)))
-                    if($name -eq 'Downloader.Core.ps1'){$writer.Write("`r`n# new fixture release")}
-                    if($InvalidScript -and $name -eq 'Start-GUI.ps1'){$writer.Write("`r`nfunction {")}
-                }
-            }finally{$writer.Dispose()}
+            $bytes=[IO.File]::ReadAllBytes((Join-Path $AppPath $name))
+            if($name -eq 'VERSION.txt'){$bytes=[Text.Encoding]::UTF8.GetBytes('9.0.0')}
+            if($name -eq 'README.txt'){$bytes=[Text.Encoding]::UTF8.GetBytes('New release README')}
+            if($name -eq 'Downloader.Core.ps1'){$bytes+=([Text.Encoding]::UTF8.GetBytes("`r`n# new fixture release"))}
+            if($InvalidScript -and $name -eq 'Start-GUI.ps1'){$bytes+=([Text.Encoding]::UTF8.GetBytes("`r`nfunction {"))}
+            $entryStream=$entry.Open()
+            try{$entryStream.Write($bytes,0,$bytes.Length)}finally{$entryStream.Dispose()}
         }
         $extra=if($ExtraPath){$ExtraPath}else{'Bilibili-Downloader/tools/keep.txt'}
         $writer=New-Object IO.StreamWriter($zip.CreateEntry($extra).Open())
@@ -88,4 +91,23 @@ $release.assets[0].browser_download_url='https://example.com/untrusted.zip';$rej
 try{$null=Get-AppUpdatePlan $release '2.3.0'}catch{$rejected=$true}
 Assert $rejected 'Reject release assets outside configured repository'
 Assert ((Get-DownloadErrorHint 'yt_dlp.utils.ThrottledDownload: The download speed is below throttle limit') -match 'ngưỡng tốc độ thấp') 'Reported throttle exception has a specific explanation'
+Assert (Test-VocalPackage $root) 'Vocal module is included in the application runtime'
+Assert ((Get-AppUpdatePlan ([pscustomobject]@{tag_name='v9.0.0';draft=$false;prerelease=$false;assets=@([pscustomobject]@{name=$name;browser_download_url=$base+$name},[pscustomobject]@{name=$name+'.sha256';browser_download_url=$base+$name+'.sha256'})}) '9.0.0' -Repair).Available) 'Repair can complete an equal-version module install'
+$root=Fresh-Root
+$result=Try-Install $root $zip
+Assert ((Get-Content -LiteralPath (Join-Path $root 'tools/vocal-remover/ui-settings.json') -Raw) -eq 'user settings') 'Combined update preserves vocal settings'
+$root=Fresh-Root
+$before=@{};foreach($file in Get-AppRuntimeFiles){$before[$file]=(Get-FileHash -LiteralPath (Join-Path $root $file)).Hash}
+$locked=[IO.File]::Open((Join-Path $root 'tools/vocal-remover/requirements.txt'),[IO.FileMode]::Open,[IO.FileAccess]::Read,[IO.FileShare]::Read)
+$rejected=$false
+try{try{$null=Try-Install $root $zip}catch{$rejected=$true}}finally{$locked.Dispose()}
+$restored=$true;foreach($file in Get-AppRuntimeFiles){if((Get-FileHash -LiteralPath (Join-Path $root $file)).Hash -ne $before[$file]){$restored=$false}}
+Assert ($rejected -and $restored) 'Vocal replacement failure rolls back both application components'
+$root=Fresh-Root -Legacy
+. (Join-Path $PSScriptRoot 'fixtures/AppUpdate-2.3.ps1')
+$null=Try-Install $root $zip
+Assert ((Get-Content -LiteralPath (Join-Path $root 'VERSION.txt') -Raw).Trim() -eq '9.0.0' -and -not [IO.File]::Exists((Join-Path $root 'tools/vocal-remover/app.py'))) 'Legacy 2.3 updater safely installs the bridge and leaves module pending'
+. (Join-Path $AppPath 'AppUpdate.Core.ps1')
+$null=Try-Install $root $zip
+Assert (Test-VocalPackage $root) 'Bridge completes the module from the same verified release package'
 Write-Host "TOTAL PASS $passed"

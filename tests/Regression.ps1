@@ -45,7 +45,7 @@ $script:lastLogText=''
 Add-Log $originalError
 Add-Log (Protect-DownloadLog $originalError)
 Assert ($logBox.Text.Split([char]10).Count -eq 2 -and $logBox.Text -notmatch 'token=secret') 'Duplicate console/state errors logged once with token hidden'
-foreach($controlName in @('urlBox','nameBox','folderBox','browseButton','getQualityButton','updateButton','appUpdateButton','qualityBox','downloadButton','openFolderButton','stopButton')){
+foreach($controlName in @('urlBox','nameBox','folderBox','browseButton','getQualityButton','updateButton','appUpdateButton','vocalButton','qualityBox','downloadButton','openFolderButton','stopButton')){
     Set-Variable -Name $controlName -Value ([pscustomobject]@{Enabled=$true;Text=''})
 }
 foreach($functionName in @('Set-UiBusy','Reset-CompletedDownload')){
@@ -66,6 +66,10 @@ Assert (-not $script:downloadComplete -and $downloadButton.Enabled -and -not $op
 $script:choices=@()
 Reset-CompletedDownload
 Assert (-not $downloadButton.Enabled) 'Changed URL without quality cannot start a download'
+$script:vocalWorker=[pscustomobject]@{HasExited=$false}
+Set-UiBusy $false
+Assert (-not $appUpdateButton.Enabled -and -not $vocalButton.Enabled) 'Vocal window blocks updating and duplicate launch'
+$script:vocalWorker=$null
 $state=Join-Path $testDir 'state.json'
 Write-AtomicJson $state @{message='中文 tiếng Việt';percent=1}
 Assert ((Read-SharedJson $state).message -eq '中文 tiếng Việt') 'Shared UTF8 JSON round trip'

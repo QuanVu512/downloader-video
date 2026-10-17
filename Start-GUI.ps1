@@ -1,10 +1,12 @@
-﻿$ErrorActionPreference = 'Stop'
+﻿param([switch]$SmokeTest)
+$ErrorActionPreference = 'Stop'
 Add-Type -AssemblyName System.Windows.Forms
 Add-Type -AssemblyName System.Drawing
 [System.Windows.Forms.Application]::EnableVisualStyles()
 
 $root = $PSScriptRoot
 . (Join-Path $root 'Downloader.Core.ps1')
+. (Join-Path $root 'AppUpdate.Core.ps1')
 $workerScript = Join-Path $root 'Start-Bilibili-Download.ps1'
 $workDir = Join-Path $root 'work'
 New-Item -ItemType Directory -Force -Path $workDir | Out-Null
@@ -21,6 +23,9 @@ $script:errTask = $null
 $script:stopRequested = $false
 $script:downloadComplete = $false
 $script:completedDirectory = ''
+$script:vocalWorker = $null
+$script:vocalState = ''
+$script:vocalMessage = ''
 
 $navy = [Drawing.Color]::FromArgb(24, 38, 62)
 $blue = [Drawing.Color]::FromArgb(38, 108, 210)
@@ -63,7 +68,7 @@ $form.Font = New-Object Drawing.Font('Segoe UI', 10)
 
 $header = New-Object Windows.Forms.Panel
 $header.Dock = [Windows.Forms.DockStyle]::Top; $header.Height = 86; $header.BackColor = $navy
-$title = New-Label 'Bilibili Downloader' 28 16 280 32 18 $true
+$title = New-Label 'Bilibili + Vocal' 28 16 270 32 18 $true
 $title.ForeColor = [Drawing.Color]::White
 $subtitle = New-Label 'Video, âm thanh và ZIP cho CapCut' 30 51 280 22 9 $false
 $subtitle.ForeColor = [Drawing.Color]::FromArgb(202, 215, 233)
@@ -79,6 +84,9 @@ $header.Controls.Add($updateButton)
 $appUpdateButton = New-Button 'Cập nhật ứng dụng' 675 23 210 36 $false
 $appUpdateButton.Anchor = [Windows.Forms.AnchorStyles]::Top -bor [Windows.Forms.AnchorStyles]::Right
 $header.Controls.Add($appUpdateButton)
+$vocalButton = New-Button 'Vocal Remover' 310 23 145 36 $false
+$vocalButton.Anchor = [Windows.Forms.AnchorStyles]::Top -bor [Windows.Forms.AnchorStyles]::Right
+$header.Controls.Add($vocalButton)
 
 $content.Controls.Add((New-Label '1. Link video' 0 0 180 24 10 $true))
 $urlBox = New-TextBox 0 28 656
@@ -193,6 +201,9 @@ function Set-UiBusy([bool]$busy) {
     $downloadButton.Text = if ($script:downloadComplete) { 'Đã tải xong' } else { 'Tải video và âm thanh' }
     $openFolderButton.Enabled = -not $busy -and $script:downloadComplete
     $stopButton.Enabled = $busy
+    $vocalRunning=$script:vocalWorker -and -not $script:vocalWorker.HasExited
+    $appUpdateButton.Enabled=-not $busy -and -not $vocalRunning
+    $vocalButton.Enabled=-not $busy -and -not $vocalRunning
 }
 function Reset-CompletedDownload {
     if ($script:worker) { return }
@@ -221,6 +232,36 @@ $urlBox.Add_TextChanged({
 })
 $updateButton.Add_Click({ Start-WorkerSafely 'setup' @('-SetupOnly', '-UpdateTools') })
 $appUpdateButton.Add_Click({ Start-WorkerSafely 'app-update' @('-UpdateApp') })
+$vocalTimer=New-Object Windows.Forms.Timer
+$vocalTimer.Interval=500
+$vocalButton.Add_Click({
+    try{
+        if($script:vocalWorker -and -not $script:vocalWorker.HasExited){return}
+        $script:vocalState=Join-Path $workDir ('vocal-'+[Guid]::NewGuid().ToString('N')+'.json')
+        $args=@('-NoProfile','-ExecutionPolicy','Bypass','-File',$workerScript,'-OpenVocal','-StateFile',$script:vocalState)
+        if($script:downloadComplete){
+            $safeName=ConvertTo-SafeFileName $nameBox.Text.Trim()
+            $audioPath=Join-Path $script:completedDirectory ($safeName+'_audio.m4a')
+            if([IO.File]::Exists($audioPath)){$args+=@('-VocalInput',$audioPath)}
+        }
+        $script:vocalWorker=Start-Process -FilePath (Join-Path $env:WINDIR 'System32/WindowsPowerShell/v1.0/powershell.exe') -WindowStyle Hidden -PassThru -ArgumentList (($args | ForEach-Object {Quote-ProcessArgument ([string]$_)}) -join ' ')
+        $script:vocalMessage='';$vocalButton.Enabled=$false;$appUpdateButton.Enabled=$false
+        Add-Log 'Đang mở Vocal Remover. Hai chức năng dùng chung phiên bản và nút Cập nhật ứng dụng.'
+        $vocalTimer.Start()
+    }catch{Add-Log $_.Exception.Message;Set-UiBusy ([bool]$script:worker)}
+})
+$vocalTimer.Add_Tick({
+    if($script:vocalState -and [IO.File]::Exists($script:vocalState)){
+        try{
+            $vocalStatus=Read-SharedJson $script:vocalState
+            if($vocalStatus.message -and $vocalStatus.message -ne $script:vocalMessage){Add-Log $vocalStatus.message;$script:vocalMessage=$vocalStatus.message}
+        }catch{}
+    }
+    if($script:vocalWorker -and $script:vocalWorker.HasExited){
+        $vocalTimer.Stop();$script:vocalWorker.Dispose();$script:vocalWorker=$null
+        Set-UiBusy ([bool]$script:worker)
+    }
+})
 $stopButton.Add_Click({
     if ($script:worker -and -not $script:worker.HasExited) {
         $script:stopRequested = $true; $stopButton.Enabled = $false
@@ -334,4 +375,19 @@ $form.Add_FormClosing({
     }
 })
 
+$form.Add_Shown({
+    if(-not (Test-VocalPackage $root)){
+        Add-Log 'Đang hoàn tất Vocal Remover sau nâng cấp; các phần dữ liệu cũ được giữ nguyên.'
+        Start-WorkerSafely 'app-update' @('-UpdateApp')
+    }
+})
+if($SmokeTest){
+    if($vocalButton.Text -ne 'Vocal Remover' -or -not $header.Controls.Contains($vocalButton)){throw 'Vocal entry button is missing.'}
+    if(-not (Test-VocalPackage $root)){throw 'Integrated Vocal module is incomplete.'}
+    Set-UiBusy $false
+    if(-not $vocalButton.Enabled){throw 'Vocal entry button is unexpectedly disabled.'}
+    $form.Dispose()
+    Write-Host 'PASS Bilibili GUI includes Vocal entry and shared updater'
+    return
+}
 [void]$form.ShowDialog()

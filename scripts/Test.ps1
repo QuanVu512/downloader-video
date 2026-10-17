@@ -14,3 +14,10 @@ foreach($test in @('Regression.ps1','Zip-Regression.ps1','Update-Regression.ps1'
 }
 python (Join-Path $root 'tests/integration.py')
 if($LASTEXITCODE -ne 0){throw 'HTTP integration failed'}
+if($env:VOCAL_TEST_PYTHON){$vocalPython=$env:VOCAL_TEST_PYTHON}else{$vocalPython=(Get-Command python).Source}
+& $vocalPython -m unittest discover -s (Join-Path $root 'tools/vocal-remover') -v
+if($LASTEXITCODE -ne 0){throw 'Vocal tests failed'}
+& $powershell -NoProfile -ExecutionPolicy Bypass -File (Join-Path $root 'tests/Vocal-Lock.ps1') -AppPath $root -Python $vocalPython
+if($LASTEXITCODE -ne 0){throw 'Cross-process vocal update lock test failed'}
+& $powershell -NoProfile -STA -ExecutionPolicy Bypass -File (Join-Path $root 'Start-GUI.ps1') -SmokeTest
+if($LASTEXITCODE -ne 0){throw 'Integrated GUI smoke test failed'}

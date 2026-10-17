@@ -4,6 +4,13 @@ Tải một phần video Bilibili thành MP4 không tiếng và AAC riêng, sau 
 
 ## Sử dụng
 
+Bản 2.4 thêm nút **Vocal Remover** trong Bilibili; mở sẵn audio vừa tải để xử lý.
+Hai chức năng dùng chung repo, VERSION.txt, gói phát hành và nút **Cập nhật ứng dụng**.
+Nâng từ 2.3: lần mở Vocal đầu hoàn tất module từ ZIP đã tải, xác minh checksum GitHub.
+Đóng Vocal trước khi cập nhật. Python 3.12/FFmpeg và model UVR là yêu cầu riêng của
+Vocal; môi trường thư viện được dùng lại hoặc chuẩn bị riêng lần đầu. Không đưa model,
+media, `.venv` hoặc checkpoint lên GitHub. CLI JSON của Vocal vẫn dùng cho tự động hoá.
+
 Tải ZIP tại [GitHub Releases](https://github.com/QuanVu512/downloader-video/releases/latest), giải nén vào một thư mục riêng rồi mở `Start.bat`.
 
 1. Dán link video Bilibili, có thể chỉ định phần bằng `?p=2`.

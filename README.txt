@@ -1,6 +1,10 @@
-﻿BILIBILI DOWNLOADER 2.3 — Windows (17/10/2026)
+﻿BILIBILI + VOCAL REMOVER 2.4 — Windows (17/10/2026)
 
 MỞ VÀ DÙNG
+Bản 2.4 có nút Vocal Remover ngay trên cửa sổ Bilibili. Tải xong rồi bấm nút này để mở sẵn audio vừa tải; cũng có thể chọn audio/video khác. Hai chức năng cùng repo, VERSION.txt và nút Cập nhật ứng dụng.
+Nâng từ 2.3: lần mở Vocal đầu hoàn tất module từ ZIP đã tải, xác minh bằng checksum GitHub. Đóng Vocal trước khi cập nhật. Model UVR, môi trường Python, thiết lập và checkpoint được giữ riêng, không thay khi cập nhật code.
+Vocal cần Python 3.12 64-bit, FFmpeg trong PATH và model UVR-MDX-NET Inst HQ 1 từ bản UVR đã cài. Nếu chưa có môi trường thư viện phù hợp, app chuẩn bị riêng lần đầu qua mạng. Không phát hành trọng số model hoặc media lên GitHub.
+Vocal tự chia phần, xử lý tuần tự CPU 2 luồng, ghép đúng số mẫu và lưu tiến độ. Mặc định phần 120 giây + vùng chồng lấn. Cần đủ dung lượng đĩa cho file trung gian; nên nghe đối chiếu chất lượng.
 Bản 2.3 tách Cập nhật ứng dụng (repo QuanVu512/downloader-video, có kiểm tra SHA-256 và sao lưu) khỏi Cập nhật yt-dlp. Chỉ cập nhật ứng dụng khi không có tác vụ tải. Sau khi cài xong giao diện mở lại. Tăng VERSION.txt rồi commit/push main để GitHub Actions kiểm tra và tạo Release mới.
 Bản 2.2 tự tạo <tên>stage1.zip trong thư mục lưu sau khi video và âm thanh đã được xác minh. ZIP chỉ chứa hai tệp media ở thư mục gốc, dùng trực tiếp cho capcut-1-5-auto-dub giai đoạn 1. Tệp rời vẫn được giữ. Không nén lại media; hỗ trợ tệp lớn bằng ZIP64. ZIP cùng tên được kiểm tra SHA-256 để dùng lại; nếu nội dung khác, ứng dụng giữ nguyên ZIP cũ và báo lỗi. Lỗi đóng gói không làm mất video/âm thanh, bấm tải lại cùng thông tin để thử đóng gói tiếp.
 Từ bản 2.1.1, khi hai tệp đã được xác minh, nút tải chuyển thành Đã tải xong và khóa; bấm Mở thư mục chứa tệp để xem kết quả. Đổi link, chất lượng, tên hoặc thư mục sẽ mở lại nút tải cho lựa chọn mới. Nếu hai tệp đã có sẵn từ một lượt trước, ứng dụng chỉ xác minh lại, không tải lại dữ liệu.
@@ -30,7 +34,7 @@ XÁC MINH KẾT QUẢ
 Ứng dụng chỉ đổi tệp tải thành tên chính thức sau khi công cụ báo hoàn tất, aria2 không còn phần thiếu (nếu dùng aria2), và kiểm tra cấu trúc MP4, luồng hình/tiếng, độ cao, thời lượng. Dung lượng được đối chiếu nếu nguồn trả số byte chính xác. Hai tệp phải có thời lượng gần nhau. Kiểm tra này không giải mã từng khung hình và không thay thế checksum nguồn khi nguồn không cung cấp.
 
 PORTABLE / COMMAND LINE
-- Không cần cài Python hoặc thay thiết lập PowerShell của máy. ExecutionPolicy Bypass chỉ áp dụng cho tiến trình mở ứng dụng.
+- Riêng chức năng tải Bilibili không cần Python; Vocal cần Python/FFmpeg như trên. Không thay thiết lập PowerShell của máy; ExecutionPolicy Bypass chỉ áp dụng cho tiến trình mở ứng dụng.
 - Gói đã kèm yt-dlp và aria2. Nếu thiếu công cụ, ứng dụng tải chúng từ GitHub chính thức.
 - Start-CLI.bat -SetupOnly
 - Start-CLI.bat "LINK_BILIBILI" -InspectOnly

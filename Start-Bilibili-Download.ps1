@@ -1,7 +1,8 @@
 ﻿param(
     [Parameter(Position = 0)][string]$Url,
     [string]$VideoFormatId, [string]$FileName, [string]$OutputDirectory, [string]$StateFile,
-    [switch]$SetupOnly, [switch]$InspectOnly, [switch]$ListQualities, [switch]$UpdateTools, [switch]$UpdateApp
+    [switch]$SetupOnly, [switch]$InspectOnly, [switch]$ListQualities, [switch]$UpdateTools, [switch]$UpdateApp,
+    [switch]$OpenVocal, [string]$VocalInput
 )
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'
@@ -256,12 +257,43 @@ function Download-Track([string]$Kind,[string]$FormatId,[string]$Target,[int]$He
 }
 try{
     $script:overallPercent=0
+    if($OpenVocal){
+        . (Join-Path $Root 'AppUpdate.Core.ps1')
+        if(-not (Test-VocalPackage $Root)){
+            $applicationLock=Open-ApplicationLock $Root -Exclusive
+            Set-DownloaderState 'working' 'Đang hoàn tất module Vocal Remover từ gói cập nhật...'
+            $null=Invoke-AppUpdate -Root $Root -RepairVocal
+            $applicationLock.Dispose();$applicationLock=$null
+            if(-not (Test-VocalPackage $Root)){throw 'Thiếu module Vocal Remover. Bấm Cập nhật ứng dụng rồi thử lại.'}
+        }
+        $applicationLock=Open-ApplicationLock $Root
+        Set-DownloaderState 'working' 'Đang chuẩn bị Vocal Remover...'
+        $python=Get-VocalPython $Root
+        $dataRoot=Get-VocalDataRoot $Root
+        $env:VOCAL_DATA_ROOT=$dataRoot
+        $env:VOCAL_SETTINGS_PATH=Join-Path $dataRoot 'work/vocal-remover/ui-settings.json'
+        $env:PYTHONUTF8='1'
+        $env:PYTHONIOENCODING='utf-8'
+        $entry=Join-Path $Root 'tools/vocal-remover/gui_entry.py'
+        $vocalArgs=@($entry)
+        if($VocalInput -and [IO.File]::Exists($VocalInput)){$vocalArgs+=@('--input',[IO.Path]::GetFullPath($VocalInput))}
+        $startInfo=New-Object Diagnostics.ProcessStartInfo
+        $startInfo.FileName=Join-Path ([IO.Path]::GetDirectoryName($python)) 'pythonw.exe'
+        $startInfo.Arguments=(($vocalArgs | ForEach-Object {Quote-ProcessArgument ([string]$_)}) -join ' ')
+        $startInfo.WorkingDirectory=$Root;$startInfo.UseShellExecute=$false;$startInfo.CreateNoWindow=$true
+        $vocalProcess=[Diagnostics.Process]::Start($startInfo)
+        Set-DownloaderState 'working' 'Vocal Remover đã mở. Đóng cửa sổ tách lời trước khi cập nhật ứng dụng.'
+        $vocalProcess.WaitForExit()
+        if($vocalProcess.ExitCode -ne 0){throw 'Vocal Remover không khởi động được; kiểm tra tools/vocal-remover/startup-error.log.'}
+        Set-DownloaderState 'complete' 'Đã đóng Vocal Remover.' 100
+        exit 0
+    }
     if($UpdateApp){
         . (Join-Path $Root 'AppUpdate.Core.ps1')
         $applicationLock=Open-ApplicationLock $Root -Exclusive
         Set-DownloaderState 'working' 'Đang kiểm tra phiên bản ứng dụng trên GitHub...'
-        $update=Invoke-AppUpdate -Root $Root
-        if($update.Updated){Set-DownloaderState 'complete' ("Đã cập nhật ứng dụng lên {0}. Đang mở lại..." -f $update.Version) 100}
+        $update=Invoke-AppUpdate -Root $Root -RepairVocal
+        if($update.Updated){Set-DownloaderState 'complete' ("Đã cập nhật Bilibili và Vocal Remover lên {0}." -f $update.Version) 100}
         else{Set-DownloaderState 'complete' ("Ứng dụng đã ở phiên bản mới nhất: {0}." -f $update.Version) 100}
         exit 0
     }

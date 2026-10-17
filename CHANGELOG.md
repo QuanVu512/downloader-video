@@ -1,3 +1,10 @@
+﻿# Bilibili + Vocal Remover 2.4.0
+
+- Thêm nút Vocal Remover trong Bilibili, chuyển sẵn audio vừa tải sang giao diện tách lời.
+- Cập nhật engine và giao diện Vocal cùng Bilibili trong một gói phát hành.
+- Hoàn tất module từ ZIP đã xác minh khi nâng từ updater 2.3.
+- Khoá cập nhật giữa Python và PowerShell; giữ model, môi trường, thiết lập và checkpoint.
+- CI kiểm tra cả hai chức năng, rollback và tương thích nâng cấp trước phát hành.
 # Bilibili Downloader 2.3.0
 
 - Cho phép tải HTTP tiếp tục khi tốc độ thấp hơn 64 KiB/s; không phát sinh `ThrottledDownload` từ ngưỡng do ứng dụng đặt.
