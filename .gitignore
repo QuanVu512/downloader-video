@@ -1,0 +1,14 @@
+/tools/
+/work/
+/dist/
+/tests/work/
+__pycache__/
+*.pyc
+*.part
+*.aria2
+*.dump
+*.download.lock
+*.bilibili.json
+*.tmp
+.env
+.env.*

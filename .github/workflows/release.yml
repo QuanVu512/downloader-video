@@ -1,0 +1,44 @@
+name: Test and release
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: write
+concurrency:
+  group: release-main
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: windows-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - name: Install download tools
+        shell: powershell
+        run: |
+          & ./Start-Bilibili-Download.ps1 -SetupOnly
+          if ($LASTEXITCODE -ne 0) { throw 'Setup failed' }
+      - name: Test
+        shell: powershell
+        run: ./scripts/Test.ps1
+      - name: Build portable ZIP
+        shell: powershell
+        run: ./scripts/Build-Release.ps1
+      - name: Publish new version
+        shell: powershell
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+        run: |
+          $ErrorActionPreference='Stop'
+          $version=(Get-Content ./VERSION.txt -TotalCount 1).Trim()
+          $tag='v'+$version
+          $existing=gh api "repos/$env:GH_REPO/releases" --jq '.[].tag_name'
+          if ($LASTEXITCODE -ne 0) { throw 'Cannot query releases' }
+          if ($existing -contains $tag) { Write-Host "Release $tag already exists; increment VERSION.txt for a new release."; exit 0 }
+          $zip="dist/Bilibili-Downloader-Windows-$version.zip"
+          gh release create $tag $zip "$zip.sha256" --target $env:GITHUB_SHA --title "Bilibili Downloader $version" --notes-file ./CHANGELOG.md
+          if ($LASTEXITCODE -ne 0) { throw 'Release failed' }
