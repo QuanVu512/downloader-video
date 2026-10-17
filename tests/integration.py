@@ -203,7 +203,7 @@ try:
     run_case("403-refresh", ["403"], ["good"], expect_refresh=True)
     run_case("disconnect-backup", ["drop", "good"], ["good"])
     run_case("all-cdns-567-preserve", ["567"], ["567"], succeeds=False)
-    run_case("native-fallback", ["native"], ["good"], real_native=True)
+    run_case("native-fallback", ["567"], ["native"], real_native=True)
     run_case("native-resume", ["good"], ["good"], real_native=True, native_resume=True)
     run_case("slow-native-under-64k", ["slow"], ["good"], real_native=True, native_resume=True, slow=True)
 finally:
