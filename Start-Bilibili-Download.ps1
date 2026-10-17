@@ -233,7 +233,7 @@ function Download-Track([string]$Kind,[string]$FormatId,[string]$Target,[int]$He
             [void]$failureHistory.Add("${cdnHost}: $details")
             $statuses=@(Get-DownloadHttpStatuses $details)
             if(567 -in $statuses -or 429 -in $statuses -or $details -match 'SocketCore\.cc|handle specified is invalid|SSL/TLS'){$singleConnection=$true}
-            if($nativeInProgress -or $singleConnection -or $attempt -eq $modes.Count-1){
+            if($nativeInProgress -or $attempt -eq $modes.Count-1){
                 $native=Download-NativeTrack $currentSession $format $trackUrl $Target $Kind
                 if($native.ExitCode -eq 0){return (Complete-Track $native.Path $Target $Kind $Height $format)}
                 $transportLabel="HTTP yt-dlp $($native.ExitCode)"
