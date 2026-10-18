@@ -1,4 +1,10 @@
-﻿# Bilibili + Vocal Remover 2.4.2
+﻿# Bilibili + Vocal Remover 2.4.3
+
+- Thêm curl dự phòng trên Windows, tải đoạn 8 MiB và checkpoint riêng có xác minh Range; giữ nguyên phần aria2 và HTTP cũ.
+- Đổi CDN khi curl dưới 256 KiB/s trong 30 giây; chuyển khỏi aria2 khi video tải quá chậm. HTTP yt-dlp vẫn là phương án cuối cho mạng chậm.
+- Kiểm tra tải tiếp, mất kết nối, Range sai/bị bỏ qua, tệp đã đủ và phản hồi HTTP lỗi; xác minh media và ZIP như trước.
+
+# Bilibili + Vocal Remover 2.4.2
 
 - Khi aria2 gặp HTTP 567/429 hoặc lỗi socket, thử tiếp aria2 với một kết nối và URL mới trước khi chuyển sang HTTP yt-dlp.
 

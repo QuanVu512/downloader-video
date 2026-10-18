@@ -14,6 +14,8 @@ foreach($test in @('Regression.ps1','Zip-Regression.ps1','Update-Regression.ps1'
 }
 python (Join-Path $root 'tests/integration.py')
 if($LASTEXITCODE -ne 0){throw 'HTTP integration failed'}
+python (Join-Path $root 'tests/curl_integration.py')
+if($LASTEXITCODE -ne 0){throw 'Curl integration failed'}
 if($env:VOCAL_TEST_PYTHON){$vocalPython=$env:VOCAL_TEST_PYTHON}else{$vocalPython=(Get-Command python).Source}
 & $vocalPython -m unittest discover -s (Join-Path $root 'tools/vocal-remover') -v
 if($LASTEXITCODE -ne 0){throw 'Vocal tests failed'}

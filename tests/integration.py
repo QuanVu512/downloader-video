@@ -50,7 +50,7 @@ class Handler(BaseHTTPRequestHandler):
         case = query["case"][0]
         data = CASE_VIDEO[case] if "30064" in parsed.path else AUDIO
         slow = mode == "slow"
-        if slow and self.headers.get("User-Agent", "").startswith("aria2"):
+        if slow and self.headers.get("User-Agent", "").startswith(("aria2", "curl")):
             mode = "567"
         start, end = 0, len(data) - 1
         header = self.headers.get("Range", "")
@@ -174,6 +174,8 @@ def run_case(name, initial, fresh, succeeds=True, expect_refresh=False, real_nat
             assert digest(package.read(f"{name_base}_audio.m4a")) == digest(AUDIO)
         if real_native:
             assert partial.exists() and digest(partial.read_bytes()) == original_partial_hash
+        elif "[curl] Đã xác minh video hoàn tất." in output:
+            assert partial.exists() and partial.read_bytes()[:131072] == video_data[:131072]
         else:
             assert not partial.exists()
         if initial[0] == "567":
@@ -181,6 +183,8 @@ def run_case(name, initial, fresh, succeeds=True, expect_refresh=False, real_nat
             assert "(1 kết nối" in output
         if expect_refresh:
             assert extracted >= 3, extracted  # Initial video, refreshed video, refreshed audio.
+        if slow:
+            assert "Chuyển sang HTTP của yt-dlp cho video" in output, "Final native fallback must tolerate a slow connection"
     else:
         assert completed.returncode == 1 and state["status"] == "error", output
         assert partial.exists() and digest(partial.read_bytes()) == original_partial_hash
@@ -203,9 +207,9 @@ try:
     run_case("403-refresh", ["403"], ["good"], expect_refresh=True)
     run_case("disconnect-backup", ["drop", "good"], ["good"])
     run_case("all-cdns-567-preserve", ["567"], ["567"], succeeds=False)
-    run_case("native-fallback", ["567"], ["native"], real_native=True)
+    run_case("curl-fallback", ["567"], ["native"], real_native=True)
     run_case("native-resume", ["good"], ["good"], real_native=True, native_resume=True)
-    run_case("slow-native-under-64k", ["slow"], ["good"], real_native=True, native_resume=True, slow=True)
+    run_case("slow-native-under-64k", ["slow"], ["slow"], real_native=True, native_resume=True, slow=True)
 finally:
     server.shutdown()
     (RUN / "results.json").write_text(json.dumps(results, indent=2), encoding="utf-8")

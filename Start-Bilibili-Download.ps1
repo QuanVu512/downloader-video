@@ -160,6 +160,42 @@ function Download-NativeTrack($CurrentSession,$Format,[string]$TrackUrl,[string]
     $detailLines=if($nativeErrors.Count){$nativeErrors.ToArray()}else{$nativeLines.ToArray()}
     return [pscustomobject]@{ExitCode=$result.ExitCode;Path=$nativePath;Details=(@($detailLines | Select-Object -Last 6) -join ' | ')}
 }
+function Download-CurlTrack($CurrentSession,$Format,[string]$TrackUrl,[string]$Target,[string]$Kind){
+    $curl=Get-Command curl.exe -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1
+    if(-not $curl){return [pscustomobject]@{Available=$false;ExitCode=-1;Details='Không có curl trên Windows.'}}
+    if(Test-Path -LiteralPath "$Target.native"){
+        return [pscustomobject]@{Available=$true;ExitCode=0;Path="$Target.native";Details=''}
+    }
+    $path="$Target.curl.part"
+    # yt-dlp native checkpoints are sequential too. Copy, never alter the original.
+    if(-not (Test-Path -LiteralPath $path) -and (Test-Path -LiteralPath "$Target.native.part")){
+        Copy-Item -LiteralPath "$Target.native.part" -Destination $path
+    }
+    $curlHeaders=@{Referer='https://www.bilibili.com/'}
+    foreach($source in @($CurrentSession.Info.http_headers,$Format.http_headers)){
+        if($source.Referer){$curlHeaders.Referer=[string]$source.Referer}
+        if($source.'User-Agent'){$curlHeaders['User-Agent']=[string]$source.'User-Agent'}
+    }
+    $size=if($Format.filesize){[long]$Format.filesize}elseif($Format.filesize_approx){[long]$Format.filesize_approx}else{0L}
+    $progress=@{bytes=if(Test-Path -LiteralPath $path){(Get-Item -LiteralPath $path).Length}else{0L};seconds=0.0}
+    $clock=[Diagnostics.Stopwatch]::StartNew()
+    $onProgress={param($bytes)
+        $elapsed=$clock.Elapsed.TotalSeconds
+        if($elapsed-$progress.seconds -lt 1){return}
+        $speed=[Math]::Max(0,($bytes-$progress.bytes)/($elapsed-$progress.seconds)/1MB)
+        $progress.bytes=$bytes;$progress.seconds=$elapsed
+        $percent=if($size -gt 0){[Math]::Min(99,[int](100.0*$bytes/$size))}else{0}
+        $script:overallPercent=if($Kind -eq 'video'){[int]($percent*0.9)}else{90+[int]($percent*0.09)}
+        Set-DownloaderState 'downloading' ("curl {0}: {1}% | {2:N2} MiB/s | {3:N1} MiB" -f $Kind,$percent,$speed,($bytes/1MB)) $script:overallPercent
+    }
+    Set-DownloaderState 'downloading' ("Đang tải {0} bằng curl từ {1}; tiếp tục checkpoint riêng..." -f $Kind,([uri]$TrackUrl).Host) $script:overallPercent
+    $expectedSize=if($Format.filesize){[long]$Format.filesize}else{0L}
+    do{
+        $result=Invoke-CurlDownload -Executable $curl.Source -Url $TrackUrl -Path $path -Headers $curlHeaders -Directory $scratch -ExpectedSize $expectedSize -OnProgress $onProgress
+        if($result.TotalBytes -gt 0){$size=$result.TotalBytes}
+    }while($result.ExitCode -eq 0 -and -not $result.Complete)
+    return [pscustomobject]@{Available=$true;ExitCode=$result.ExitCode;Path=$result.Path;Details=$result.Details}
+}
 function Download-Track([string]$Kind,[string]$FormatId,[string]$Target,[int]$Height){
     $trackRecord=$manifest[$Kind]
     if(Test-Path -LiteralPath $Target){
@@ -216,10 +252,12 @@ function Download-Track([string]$Kind,[string]$FormatId,[string]$Target,[int]$He
                     Set-DownloaderState 'downloading' ("Đang tải {0}: {1}%{2}{3}" -f $phase,$percent,$speed,$eta) $script:overallPercent
                 }
             }
-            $arguments=@('--no-conf=true',"--input-file=$inputPath","--dir=$dest",'--continue=true','--always-resume=true','--allow-overwrite=false','--auto-file-renaming=false','--auto-save-interval=2','--max-concurrent-downloads=1','--max-tries=2','--retry-wait=2','--timeout=30','--connect-timeout=20',"--split=$connections","--max-connection-per-server=$connections",'--min-split-size=1M','--file-allocation=none','--summary-interval=1','--console-log-level=notice','--show-console-readout=true')+$headers
+            $lowestSpeed=if($Kind -eq 'video'){'256K'}else{'0'}
+            $arguments=@('--no-conf=true',"--input-file=$inputPath","--dir=$dest",'--continue=true','--always-resume=true','--allow-overwrite=false','--auto-file-renaming=false','--auto-save-interval=2','--max-concurrent-downloads=1','--max-tries=2','--retry-wait=2','--timeout=30','--connect-timeout=20',"--split=$connections","--max-connection-per-server=$connections",'--min-split-size=1M',"--lowest-speed-limit=$lowestSpeed",'--file-allocation=none','--summary-interval=1','--console-log-level=notice','--show-console-readout=true')+$headers
             $nativeInProgress=(Test-Path -LiteralPath "$Target.native.part") -or (Test-Path -LiteralPath "$Target.native")
+            $curlInProgress=Test-Path -LiteralPath "$Target.curl.part"
             $transportLabel='aria2'
-            if($nativeInProgress){$download=[pscustomobject]@{ExitCode=1}}
+            if($nativeInProgress -or $curlInProgress){$download=[pscustomobject]@{ExitCode=1}}
             else{$download=Invoke-DownloaderProcess -Executable $bin.Aria2 -Arguments $arguments -Directory $Root -OnLine $onLine}
             if($download.ExitCode -eq 0){
                 if(Test-Path -LiteralPath "$partial.aria2"){throw 'aria2 còn ghi nhận phần chưa tải; giữ tệp dở để tiếp tục.'}
@@ -233,7 +271,20 @@ function Download-Track([string]$Kind,[string]$FormatId,[string]$Target,[int]$He
             [void]$failureHistory.Add("${cdnHost}: $details")
             $statuses=@(Get-DownloadHttpStatuses $details)
             if(567 -in $statuses -or 429 -in $statuses -or $details -match 'SocketCore\.cc|handle specified is invalid|SSL/TLS'){$singleConnection=$true}
-            if($nativeInProgress -or $attempt -eq $modes.Count-1){
+            $curlResult=Download-CurlTrack $currentSession $format $trackUrl $Target $Kind
+            if($curlResult.ExitCode -eq 0){
+                $media=Complete-Track $curlResult.Path $Target $Kind $Height $format
+                Write-Host "[curl] Đã xác minh $Kind hoàn tất."
+                return $media
+            }
+            if($curlResult.Available){
+                if($curlResult.ExitCode -in @(23,26)){throw "Không đọc/ghi được tệp curl; giữ phần dở. $($curlResult.Details)"}
+                $transportLabel='curl'
+                $details=(@($details,$curlResult.Details) | Where-Object {$_}) -join ' | '
+                $lastFailure=$details
+                [void]$failureHistory.Add("${cdnHost}: $($curlResult.Details)")
+            }
+            if(-not $curlResult.Available -or $attempt -eq $modes.Count-1){
                 $native=Download-NativeTrack $currentSession $format $trackUrl $Target $Kind
                 if($native.ExitCode -eq 0){return (Complete-Track $native.Path $Target $Kind $Height $format)}
                 $transportLabel="HTTP yt-dlp $($native.ExitCode)"

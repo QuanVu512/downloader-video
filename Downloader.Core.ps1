@@ -241,6 +241,84 @@ function Get-TrackUrls($Session, $Format) {
     return @($urls.ToArray() | Where-Object { $_ -match '^https?://' } | Select-Object -Unique)
 }
 
+function Invoke-CurlDownload {
+    param([string]$Executable,[string]$Url,[string]$Path,[hashtable]$Headers,
+        [string]$Directory,[long]$ExpectedSize=0,[scriptblock]$OnProgress,
+        [int]$LowSpeedLimit=262144,[int]$LowSpeedSeconds=30,[long]$ChunkBytes=8MB)
+    # This checkpoint is a contiguous prefix. Never pass an aria2 sparse file here.
+    $offset=if([IO.File]::Exists($Path)){(Get-Item -LiteralPath $Path).Length}else{0L}
+    $config=Join-Path $Directory ([Guid]::NewGuid().ToString('N')+'.curl.conf')
+    $headerPath=$config+'.headers'
+    $quote={param([string]$Value)
+        if($Value -match '[\r\n\x00]'){throw 'Giá trị cấu hình curl không hợp lệ.'}
+        return '"'+$Value.Replace('\','\\').Replace('"','\"')+'"'
+    }
+    $lines=@('url = '+(& $quote $Url))
+    foreach($key in $Headers.Keys){$lines+='header = '+(& $quote ($key+': '+$Headers[$key]))}
+    $lines+='header = "Accept-Encoding: identity"'
+    # Bilibili CDNs may reject open-ended requests while accepting bounded ranges.
+    $lines+='header = "Range: bytes='+$offset+'-'+($offset+$ChunkBytes-1)+'"'
+    $errors=New-Object 'Collections.Generic.List[string]'
+    $onLine={param($line)
+        if($line -match '^curl:'){
+            if($errors.Count -ge 4){$errors.RemoveAt(0)}
+            [void]$errors.Add((Protect-DownloadLog $line))
+        }
+        if($OnProgress -and $line -match '^\s*\d{1,3}\s+\S+\s+\d{1,3}\s+'){
+            if([IO.File]::Exists($Path)){& $OnProgress (Get-Item -LiteralPath $Path).Length}
+        }
+    }
+    try{
+        [IO.File]::WriteAllLines($config,$lines,(New-Object Text.UTF8Encoding($false)))
+        $arguments=@('--disable','--config',$config,'--location','--max-redirs','5',
+            '--proto','=http,https','--proto-redir','=http,https','--fail',
+            '--continue-at','-','--output',$Path,'--dump-header',$headerPath,
+            '--connect-timeout','20','--speed-limit',[string]$LowSpeedLimit,
+            '--speed-time',[string]$LowSpeedSeconds,'--retry','0')
+        $run=Invoke-DownloaderProcess -Executable $Executable -Arguments $arguments -Directory $Directory -OnLine $onLine
+        $code=$run.ExitCode
+        $raw=if([IO.File]::Exists($headerPath)){[IO.File]::ReadAllText($headerPath)}else{''}
+        $blocks=[regex]::Matches($raw,'(?m)^HTTP/[^\r\n]+')
+        $last=if($blocks.Count){$raw.Substring($blocks[$blocks.Count-1].Index)}else{''}
+        $status=if($last -match '^HTTP/\S+\s+(\d{3})'){[int]$Matches[1]}else{0}
+        $total=0L;$valid=$false
+        if($status -eq 206 -and $last -match '(?im)^Content-Range:\s*bytes\s+(\d+)-(\d+)/(\d+)\s*\r?$'){
+            $start=[long]$Matches[1];$end=[long]$Matches[2];$total=[long]$Matches[3]
+            $valid=$start -eq $offset -and $end -ge $start -and $end -lt $total
+        }elseif($status -eq 200 -and $offset -eq 0){
+            $valid=$true
+            if($last -match '(?im)^Content-Length:\s*(\d+)\s*\r?$'){$total=[long]$Matches[1]}
+        }elseif($status -eq 416 -and $last -match '(?im)^Content-Range:\s*bytes\s+\*/(\d+)\s*\r?$'){
+            $total=[long]$Matches[1]
+            $valid=$offset -gt 0 -and $offset -eq $total
+            if($valid){$code=0}
+        }
+        if($ExpectedSize -gt 0 -and $total -gt 0 -and $ExpectedSize -ne $total){$valid=$false}
+        $length=if([IO.File]::Exists($Path)){(Get-Item -LiteralPath $Path).Length}else{0L}
+        if($valid -and (($total -gt 0 -and $length -gt $total) -or ($status -eq 206 -and $length -gt $end+1))){$valid=$false}
+        if(-not $valid){
+            # A bad/ignored Range response must never poison the resumable prefix.
+            if($length -gt $offset){
+                $stream=[IO.File]::Open($Path,[IO.FileMode]::Open,[IO.FileAccess]::Write,[IO.FileShare]::None)
+                try{$stream.SetLength($offset)}finally{$stream.Dispose()}
+            }
+            if($code -eq 0){$code=33}
+        }
+        $complete=$valid -and $code -eq 0
+        if($complete -and $total -gt 0 -and $length -ne $total){
+            $complete=$false
+            if($status -ne 206 -or $length -ne $end+1){$code=18}
+        }
+        if($code -eq 0 -and $length -eq 0){$code=18;$complete=$false}
+        $detail="curl $code, HTTP $status"
+        if(-not $valid){$detail+=': phản hồi Range hoặc dung lượng không khớp; giữ nguyên phần dở.'}
+        if($errors.Count){$detail+=' | '+($errors.ToArray() -join ' | ')}
+        return [pscustomobject]@{ExitCode=$code;Path=$Path;Details=$detail;TotalBytes=$total;Complete=$complete}
+    }finally{
+        foreach($file in @($config,$headerPath)){if([IO.File]::Exists($file)){[IO.File]::Delete($file)}}
+    }
+}
+
 function Initialize-MediaInspector {
     if ('BilibiliMediaInspector' -as [type]) { return }
     Add-Type -TypeDefinition @'
