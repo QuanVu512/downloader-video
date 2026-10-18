@@ -70,7 +70,7 @@ runner = RUN / 'invoke.ps1'
 runner.write_text('''param($Core,$Url,$Path,$Directory,$ResultFile,[long]$Size=0,[int]$Speed=262144,[int]$Seconds=30,[long]$ChunkBytes=8388608)
 $ErrorActionPreference='Stop'
 . $Core
-$curl=(Get-Command curl.exe -CommandType Application).Source
+$curl=(Get-Command curl.exe -CommandType Application | Select-Object -First 1).Source
 $progress=New-Object 'Collections.Generic.List[long]'
 $result=Invoke-CurlDownload -Executable $curl -Url $Url -Path $Path -Directory $Directory -ExpectedSize $Size -Headers @{Referer='https://www.bilibili.com/';'User-Agent'='Bili-curl-test'} -LowSpeedLimit $Speed -LowSpeedSeconds $Seconds -ChunkBytes $ChunkBytes -OnProgress {param($bytes) [void]$progress.Add($bytes)}
 @{result=$result;progress=$progress.ToArray()} | ConvertTo-Json -Depth 4 | Set-Content -LiteralPath $ResultFile -Encoding UTF8
