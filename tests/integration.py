@@ -172,12 +172,9 @@ def run_case(name, initial, fresh, succeeds=True, expect_refresh=False, real_nat
             assert sorted(package.namelist()) == sorted([f"{name_base}_video.mp4", f"{name_base}_audio.m4a"])
             assert digest(package.read(f"{name_base}_video.mp4")) == digest(video_data)
             assert digest(package.read(f"{name_base}_audio.m4a")) == digest(AUDIO)
-        if real_native:
-            assert partial.exists() and digest(partial.read_bytes()) == original_partial_hash
-        elif "[curl] Đã xác minh video hoàn tất." in output:
-            assert partial.exists() and partial.read_bytes()[:131072] == video_data[:131072]
-        else:
-            assert not partial.exists()
+        for track in ("_video.mp4", "_audio.m4a"):
+            for suffix in (".part", ".part.aria2", ".native", ".native.part", ".native.ytdl", ".curl.part"):
+                assert not (dest / f"{name_base}{track}{suffix}").exists(), "Completed download must clean every transport checkpoint"
         if initial[0] == "567":
             assert "HTTP 567" in output
             assert "(1 kết nối" in output
@@ -188,11 +185,18 @@ def run_case(name, initial, fresh, succeeds=True, expect_refresh=False, real_nat
     else:
         assert completed.returncode == 1 and state["status"] == "error", output
         assert partial.exists() and digest(partial.read_bytes()) == original_partial_hash
-        assert (dest / f"{name_base}.bilibili.json").exists()
         assert not (dest / f"{name_base}_video.mp4").exists()
         assert not (dest / f"{name_base}stage1.zip").exists()
         assert extracted == 3, extracted
         assert "HTTP 567" in state["message"]
+    record_key = hashlib.sha256(str(dest.resolve() / name_base).upper().encode("utf-8")).hexdigest().upper()
+    record_path = app / "work" / "download-records" / f"{record_key}.json"
+    record = json.loads(record_path.read_text(encoding="utf-8-sig"))
+    assert record["identity"] == identity, "Migration must preserve the source identity"
+    assert not (dest / f"{name_base}.bilibili.json").exists(), "State belongs in app work, not the output folder"
+    assert not (dest / f"{name_base}.download.lock").exists(), "Finished worker must release and remove its lock"
+    if succeeds:
+        assert record["video"]["complete"] and record["audio"]["complete"]
     result = dict(case=name, status="PASS", exit_code=completed.returncode,
                   extraction_count=extracted, requests=requests,
                   video_sha256=digest(video_data) if succeeds else None,
