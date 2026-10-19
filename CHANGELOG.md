@@ -1,4 +1,11 @@
-﻿# Bilibili + Vocal Remover 2.4.3
+﻿# Bilibili + Vocal Remover 2.4.4
+
+- Tự dọn các phần tải aria2, curl và HTTP cũ sau khi xác minh đủ video, audio và ZIP; giữ phần dở của job chưa hoàn tất để tải tiếp.
+- Windows tự xoá file khóa khi worker kết thúc, kể cả khi bị dừng từ GUI.
+- Lưu hồ sơ xác minh/tải tiếp trong work/download-records thay vì để JSON cạnh kết quả; tự chuyển hồ sơ cũ khi tiếp tục tải và vẫn dùng lại được media đã hoàn tất.
+- Thêm kiểm tra dọn file đúng job, bảo toàn media/ZIP, phân biệt hồ sơ theo thư mục và khóa tải đồng thời.
+
+# Bilibili + Vocal Remover 2.4.3
 
 - Thêm curl dự phòng trên Windows, tải đoạn 8 MiB và checkpoint riêng có xác minh Range; giữ nguyên phần aria2 và HTTP cũ.
 - Đổi CDN khi curl dưới 256 KiB/s trong 30 giây; chuyển khỏi aria2 khi video tải quá chậm. HTTP yt-dlp vẫn là phương án cuối cho mạng chậm.

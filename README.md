@@ -16,7 +16,9 @@ Tải ZIP tại [GitHub Releases](https://github.com/QuanVu512/downloader-video/
 1. Dán link video Bilibili, có thể chỉ định phần bằng `?p=2`.
 2. Bấm **Lấy chất lượng**, chọn chất lượng, tên và thư mục lưu.
 3. Bấm tải. Chỉ báo hoàn tất sau khi kiểm tra hai tệp và ZIP.
-4. Để tiếp tục, dùng đúng link/phần, chất lượng, tên và thư mục trước đó. Giữ `.part`, `.native.part`, `.aria2`, `.bilibili.json`.
+4. Để tiếp tục, dùng đúng link/phần, chất lượng, tên và thư mục trước đó. Khi chưa hoàn tất, giữ phần tải dở và thư mục `work` của ứng dụng.
+
+Sau khi kiểm tra đủ video, audio và ZIP, ứng dụng tự xoá các phần tải tạm của job. File khóa được dọn khi tác vụ kết thúc. Hồ sơ xác minh/tải tiếp được lưu nội bộ trong `work/download-records`, không để `.bilibili.json` cạnh kết quả; hồ sơ từ bản cũ được chuyển vào đó khi tải tiếp.
 
 Từ 2.3.0, tải chậm vẫn tiếp tục nhận dữ liệu; không dừng chỉ vì thấp hơn 64 KiB/s. Timeout socket vẫn xử lý kết nối đứng hoàn toàn. Phiên bản cũ có thể báo `ThrottledDownload`; cập nhật ứng dụng để nhận bản sửa.
 

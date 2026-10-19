@@ -1,4 +1,33 @@
 ﻿# Shared by the GUI, worker and regression checks. Compatible with Windows PowerShell 5.1.
+function Open-DownloadOutputLock([string]$Path) {
+    # Windows removes the lock even when the GUI terminates the worker process.
+    return [IO.FileStream]::new($Path,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None,4096,[IO.FileOptions]::DeleteOnClose)
+}
+
+function Get-DownloadRecordPath([string]$WorkDirectory,[string]$Directory,[string]$FileName) {
+    # Keep the identity needed to reuse completed media outside the output folder.
+    $identity=(Join-Path ([IO.Path]::GetFullPath($Directory)) $FileName).ToUpperInvariant()
+    $sha=[Security.Cryptography.SHA256]::Create()
+    try{$key=([BitConverter]::ToString($sha.ComputeHash([Text.Encoding]::UTF8.GetBytes($identity)))).Replace('-','')}
+    finally{$sha.Dispose()}
+    return Join-Path (Join-Path $WorkDirectory 'download-records') ($key+'.json')
+}
+
+function Remove-CompletedDownloadParts([string]$Directory,[string]$FileName) {
+    if((ConvertTo-SafeFileName $FileName) -cne $FileName){throw 'Tên dọn tệp tạm không hợp lệ.'}
+    $folder=[IO.Path]::GetFullPath($Directory)
+    # Exact job filenames only; never glob media, other jobs or subdirectories.
+    foreach($track in @('_video.mp4','_audio.m4a')){
+        foreach($suffix in @('.part','.part.aria2','.native','.native.part','.native.ytdl','.curl.part')){
+            $path=Join-Path $folder ($FileName+$track+$suffix)
+            if([IO.File]::Exists($path)){
+                try{Remove-Item -LiteralPath $path -Force -ErrorAction Stop}
+                catch{Write-Warning ("Đã tải xong nhưng chưa dọn được tệp tạm: {0}" -f [IO.Path]::GetFileName($path))}
+            }
+        }
+    }
+}
+
 function Get-FileSha256 {
     param([Parameter(Mandatory=$true)][string]$LiteralPath)
     $path=$ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($LiteralPath)

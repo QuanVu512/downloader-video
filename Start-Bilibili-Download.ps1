@@ -381,14 +381,19 @@ try{
     if((Join-Path $dest ($FileName+'_video.mp4.part.aria2')).Length -gt 245){throw 'Đường dẫn lưu quá dài cho Windows. Chọn thư mục hoặc tên tệp ngắn hơn.'}
     $writeProbe=Join-Path $dest ('.write-'+[Guid]::NewGuid().ToString('N'));[IO.File]::WriteAllText($writeProbe,'');[IO.File]::Delete($writeProbe)
     $lockPath=Join-Path $dest ($FileName+'.download.lock')
-    try{$destinationLock=[IO.File]::Open($lockPath,[IO.FileMode]::OpenOrCreate,[IO.FileAccess]::ReadWrite,[IO.FileShare]::None)}catch{throw 'Tên tệp này đang được một tác vụ khác tải. Đợi tác vụ đó hoặc chọn tên khác.'}
-    $manifestPath=Join-Path $dest ($FileName+'.bilibili.json')
+    try{$destinationLock=Open-DownloadOutputLock $lockPath}catch{throw 'Tên tệp này đang được một tác vụ khác tải. Đợi tác vụ đó hoặc chọn tên khác.'}
+    $legacyManifestPath=Join-Path $dest ($FileName+'.bilibili.json')
+    $manifestPath=Get-DownloadRecordPath $Work $dest $FileName
     $identity=$Url+'|'+$info.id+'|'+$selected.Format.format_id+'|'+$audio.format_id
     $manifest=@{schema=1;identity=$identity;url=$Url;title=$info.title;video=$null;audio=$null}
-    if(Test-Path -LiteralPath $manifestPath){
-        $saved=Read-SharedJson $manifestPath
+    $recordToRead=if(Test-Path -LiteralPath $legacyManifestPath){$legacyManifestPath}else{$manifestPath}
+    if(Test-Path -LiteralPath $recordToRead){
+        $saved=Read-SharedJson $recordToRead
         if($saved.identity -ne $identity){throw 'Tên này đã dùng cho video, phần hoặc chất lượng khác. Nhập tên mới để không trộn/ghi đè tệp cũ.'}
         $manifest.video=$saved.video;$manifest.audio=$saved.audio
+        # Save a validated internal record before removing the old output sidecar.
+        Save-Manifest
+        if(Test-Path -LiteralPath $legacyManifestPath){Remove-Item -LiteralPath $legacyManifestPath -Force}
     }else{
         foreach($suffix in @('_video.mp4','_video.mp4.part','_video.mp4.native','_video.mp4.native.part','_audio.m4a','_audio.m4a.part','_audio.m4a.native','_audio.m4a.native.part')){
             if(Test-Path -LiteralPath (Join-Path $dest ($FileName+$suffix))){throw 'Tên tệp đã tồn tại nhưng chưa có hồ sơ tải xác minh. Chọn tên khác để bảo toàn tệp cũ.'}
@@ -402,6 +407,7 @@ try{
     if([Math]::Abs($videoMedia.Duration-$audioMedia.Duration) -gt 5){throw 'Thời lượng video và âm thanh lệch quá 5 giây. Hai tệp được giữ để kiểm tra.'}
     Set-DownloaderState 'packaging' 'Đã tải đủ video và âm thanh. Đang tạo và kiểm tra ZIP cho CapCut...' 99
     $package=New-CapCutInputZip (Join-Path $dest ($FileName+'stage1.zip')) (Join-Path $dest ($FileName+'_video.mp4')) (Join-Path $dest ($FileName+'_audio.m4a'))
+    Remove-CompletedDownloadParts $dest $FileName
     Set-DownloaderState 'complete' ("Hoàn tất. ZIP dùng cho CapCut giai đoạn 1: {0}" -f $package.Path) 100
     exit 0
 }catch{
