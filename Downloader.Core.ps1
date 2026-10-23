@@ -169,6 +169,57 @@ function Protect-DownloadLog([string]$Text) {
     return [regex]::Replace($Text, '(https?://[^\s?]+)\?(?:\[signed query hidden\]|[^\s]*)', '$1?[signed query hidden]')
 }
 
+function Initialize-BilibiliPlugin([string]$Directory) {
+    # Embed in an existing runtime file so older updaters also receive the fix.
+    $plugins=Join-Path $Directory 'plugins'
+    $package=Join-Path $plugins 'bilibili/yt_dlp_plugins/extractor'
+    [void][IO.Directory]::CreateDirectory($package)
+    $code=@'
+"""Compatibility for Bilibili's missing page state (yt-dlp issue #17894).
+
+Retry the public localized page once; leave extraction, permissions and formats
+to the official extractor. No executable patch or separate Python is required.
+"""
+
+import re
+from urllib.parse import urlsplit, urlunsplit
+
+from yt_dlp.extractor.bilibili import BiliBiliIE as _BiliBiliIE
+
+
+class _BilibiliCompatibilityIE(_BiliBiliIE, plugin_name='downloader-compat'):
+    def _download_webpage_handle(self, url_or_request, video_id, *args, **kwargs):
+        result = super()._download_webpage_handle(url_or_request, video_id, *args, **kwargs)
+        if not result or not isinstance(url_or_request, str):
+            return result
+        parsed = urlsplit(url_or_request)
+        if (parsed.hostname not in ('www.bilibili.com', 'bilibili.com')
+                or not re.fullmatch(r'/video/(?:BV[0-9A-Za-z]+|av\d+)/?', parsed.path)):
+            return result
+        webpage, handle = result
+        if self._search_json(r'window\.__INITIAL_STATE__\s*=', webpage,
+                             'initial state', video_id, default=None):
+            return result
+        risk = self._search_json(r'\bwindow\._riskdata_\s*=', webpage,
+                                 'risk', video_id, default={})
+        if risk.get('v_voucher'):
+            return result
+        localized = urlunsplit(parsed._replace(path='/en' + parsed.path))
+        self.to_screen('Missing initial state; trying localized Bilibili page once')
+        fallback = super()._download_webpage_handle(
+            localized, video_id, *args, **{**kwargs, 'fatal': False})
+        if fallback and self._search_json(
+                r'window\.__INITIAL_STATE__\s*=', fallback[0],
+                'initial state', video_id, default=None):
+            # Keep the canonical response URL: the official extractor otherwise
+            # redirects localized URLs to the generic HTML extractor.
+            return fallback[0], handle
+        return result
+'@
+    [IO.File]::WriteAllText((Join-Path $package 'bilibili_compat.py'),$code,(New-Object Text.UTF8Encoding($false)))
+    return $plugins
+}
+
 function Get-DownloadHttpStatuses([string]$Text) {
     # Never interpret digits in a URL, source filename, line number or errorCode as HTTP.
     return @([regex]::Matches($Text, '(?i)(?:\bstatus\s*[=:]\s*|\bHTTP(?:/\d(?:\.\d)?)?\s+(?:Error\s+)?)([1-5]\d{2})\b') |
@@ -176,6 +227,7 @@ function Get-DownloadHttpStatuses([string]$Text) {
 }
 
 function Get-DownloadErrorHint([string]$Text) {
+    if($Text -match 'Unable to extract initial state') { return 'yt-dlp không đọc được dữ liệu trang Bilibili. Cập nhật ứng dụng để nhận bản sửa tương thích và cập nhật yt-dlp; nếu vẫn lỗi, mở video trong trình duyệt để kiểm tra khả năng truy cập.' }
     if($Text -match 'ThrottledDownload|below throttle limit') { return 'Bộ tải đã dừng vì ngưỡng tốc độ thấp. Tệp dở vẫn được giữ; bản mới cho phép tiếp tục dù tải chậm, không cần đổi quyền truy cập video.' }
     $statuses = @(Get-DownloadHttpStatuses $Text)
     if (567 -in $statuses) { return 'CDN Bilibili trả HTTP 567 và từ chối yêu cầu tải hiện tại. Chưa đủ bằng chứng để kết luận video bị xóa; thử CDN khác và URL mới, phần dở được giữ.' }

@@ -27,7 +27,7 @@ jobs:
       - name: Prepare vocal tests
         shell: powershell
         run: |
-          python -m pip install -r ./tools/vocal-remover/requirements.txt
+          python -m pip install -r ./tools/vocal-remover/requirements.txt -r ./tests/requirements.txt
           if ($LASTEXITCODE -ne 0) { throw 'Vocal dependencies failed' }
           if (-not (Get-Command ffmpeg -ErrorAction SilentlyContinue)) {
             choco install ffmpeg --no-progress -y

@@ -1,4 +1,4 @@
-# Bilibili Downloader — Windows
+﻿# Bilibili Downloader — Windows
 
 Tải một phần video Bilibili thành MP4 không tiếng và AAC riêng, sau đó tự tạo `<tên>stage1.zip` để dùng với skill CapCut. Hỗ trợ tải tiếp, CDN dự phòng, URL mới và HTTP native khi aria2 lỗi.
 
@@ -24,6 +24,8 @@ Từ 2.3.0, tải chậm vẫn tiếp tục nhận dữ liệu; không dừng ch
 
 ## Hai nút cập nhật
 
+Từ 2.4.5, khi Bilibili không trả dữ liệu trang ban đầu (`Unable to extract initial state`), ứng dụng thử trang `/en/` một lần và giữ nguyên phần `p`. Bản sửa nằm trong ứng dụng; chỉ cập nhật yt-dlp có thể chưa đủ. Plugin đi kèm dùng bộ trích xuất chính thức, không cần Python riêng cho downloader.
+
 - **Cập nhật ứng dụng**: lấy bản mới của repo này từ GitHub Releases, kiểm tra SHA-256, cú pháp script và phiên bản rồi thay các tệp ứng dụng. Giữ công cụ đã cài, thư mục `work`, video và checkpoint. Lưu bản sao phiên bản cũ; hoàn nguyên nếu cài lỗi. Khi cập nhật thành công, giao diện mở lại.
 - **Cập nhật yt-dlp**: cập nhật bộ trích xuất yt-dlp từ dự án chính thức; không đổi mã ứng dụng.
 
@@ -36,6 +38,7 @@ Repository chỉ chứa source/test, không chứa media hay các executable đ�
 Chạy kiểm tra trên Windows có Python:
 
 ```powershell
+python -m pip install -r tests/requirements.txt
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts/Test.ps1
 ```
 

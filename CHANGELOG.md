@@ -1,4 +1,10 @@
-﻿# Bilibili + Vocal Remover 2.4.4
+﻿# Bilibili + Vocal Remover 2.4.5
+
+- Sửa lỗi `Unable to extract initial state`: thử trang Bilibili `/en/` một lần khi trang thường thiếu dữ liệu video, giữ nguyên phần p và bộ trích xuất chính thức.
+- Plugin tương thích nằm trong core hiện có để updater cũ cũng nhận được bản sửa; downloader portable vẫn không cần cài Python riêng.
+- Thông báo lỗi phân biệt cập nhật ứng dụng và cập nhật yt-dlp.
+
+# Bilibili + Vocal Remover 2.4.4
 
 - Tự dọn các phần tải aria2, curl và HTTP cũ sau khi xác minh đủ video, audio và ZIP; giữ phần dở của job chưa hoàn tất để tải tiếp.
 - Windows tự xoá file khóa khi worker kết thúc, kể cả khi bị dừng từ GUI.

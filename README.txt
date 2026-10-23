@@ -33,6 +33,8 @@ TẢI TIẾP VÀ XỬ LÝ LỖI
 - 403/đăng nhập/VIP/giới hạn vùng, DNS, hết dung lượng và quyền thư mục được báo rõ. Chỉ tải chất lượng mà quyền truy cập hiện tại của ứng dụng lấy được; không có cơ chế bỏ qua quyền của Bilibili.
 - Bấm Cập nhật công cụ khi Bilibili đổi cách cung cấp thông tin. yt-dlp và checksum được lấy từ cùng một bản phát hành chính thức; công cụ cũ được giữ đến khi tải mới xác minh xong.
 
+Từ 2.4.5, lỗi thiếu dữ liệu trang Bilibili (Unable to extract initial state) được xử lý bằng cách thử trang /en/ một lần, giữ nguyên phần p. Cần cập nhật ứng dụng để nhận plugin tương thích; chỉ cập nhật yt-dlp có thể chưa đủ. Downloader vẫn không cần cài Python riêng.
+
 XÁC MINH KẾT QUẢ
 Ứng dụng chỉ đổi tệp tải thành tên chính thức sau khi công cụ báo hoàn tất, aria2 không còn phần thiếu (nếu dùng aria2), và kiểm tra cấu trúc MP4, luồng hình/tiếng, độ cao, thời lượng. Dung lượng được đối chiếu nếu nguồn trả số byte chính xác. Hai tệp phải có thời lượng gần nhau. Kiểm tra này không giải mã từng khung hình và không thay thế checksum nguồn khi nguồn không cung cấp.
 

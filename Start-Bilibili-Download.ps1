@@ -94,7 +94,8 @@ function Get-BilibiliSession {
     Set-DownloaderState 'working' 'Đang lấy thông tin và URL tải mới từ Bilibili...' $script:overallPercent
     $folder=Join-Path $scratch ([Guid]::NewGuid().ToString('N'))
     [void][IO.Directory]::CreateDirectory($folder)
-    $result=Invoke-DownloaderProcess -Executable $bin.YtDlp -Directory $folder -TimeoutSeconds 180 -Arguments @('--ignore-config','--no-playlist','--no-warnings','--socket-timeout','30','--extractor-retries','3','--dump-single-json','--write-pages',$Url)
+    $plugins=Initialize-BilibiliPlugin $folder
+    $result=Invoke-DownloaderProcess -Executable $bin.YtDlp -Directory $folder -TimeoutSeconds 180 -Arguments @('--ignore-config','--no-plugin-dirs','--plugin-dirs',$plugins,'--no-playlist','--no-warnings','--socket-timeout','30','--extractor-retries','3','--dump-single-json','--write-pages',$Url)
     if($result.ExitCode -ne 0){
         $detail=Protect-DownloadLog (@($result.StdErr | Select-Object -Last 4) -join ' | ')
         $hint=Get-DownloadErrorHint $detail
